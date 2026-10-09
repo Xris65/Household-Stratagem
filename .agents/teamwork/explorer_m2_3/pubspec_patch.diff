@@ -1,0 +1,36 @@
+--- a/app/pubspec.yaml
++++ b/app/pubspec.yaml
+@@ -36,6 +36,15 @@
+   # Use with the CupertinoIcons class for iOS style icons.
+   cupertino_icons: ^1.0.8
+ 
++  # Firebase Core & Authentication (Milestone M2 - R1)
++  firebase_core: ^4.15.0
++  firebase_auth: ^6.7.0
++
++  # Cloud Firestore Persistence (Milestone M2 - R1 & R2)
++  cloud_firestore: ^6.10.0
++
++  # Audio playback for mission timer soundtrack (Milestone M2 - R4)
++  audioplayers: ^6.8.1
++
+ dev_dependencies:
+   flutter_test:
+     sdk: flutter
+@@ -46,6 +55,9 @@
+   # rules and activating additional ones.
+   flutter_lints: ^6.0.0
+ 
++  # In-memory fake Firestore for headless unit and integration testing (Milestone M2)
++  fake_cloud_firestore: ^4.3.0
++
+ # For information on the generic Dart part of this file, see the
+ # following page: https://dart.dev/tools/pub/pubspec
+ 
+@@ -58,6 +70,9 @@
+   # the material Icons class.
+   uses-material-design: true
+ 
++  # Audio assets bundled with application for tactical mission playback
++  assets:
++    - assets/audio/

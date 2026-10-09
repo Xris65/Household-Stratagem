@@ -1,0 +1,6 @@
+.agents/
+
+# Firebase credentials & API keys
+*google-services.json
+*firebase_options.dart
+*.env
