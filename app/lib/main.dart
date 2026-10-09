@@ -8,9 +8,12 @@ import 'services/auth_service.dart';
 import 'services/household_repository.dart';
 import 'services/local_prefs_household_repository.dart';
 import 'services/local_prefs_auth_service.dart';
+import 'services/audio_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Warm up audio engine buffers in background for 0ms first-interaction latency
+  RealAudioService().warmUp();
   AuthService authService;
   HouseholdRepository householdRepo;
   try {
@@ -41,22 +44,51 @@ void main() async {
   ));
 }
 
-class HouseholdStratagemApp extends StatelessWidget {
+class HouseholdStratagemApp extends StatefulWidget {
   final AuthService authService;
   final HouseholdRepository householdRepo;
   final ThemeManager themeManager;
+  final AudioService? audioService;
 
   const HouseholdStratagemApp({
     super.key,
     required this.authService,
     required this.householdRepo,
     required this.themeManager,
+    this.audioService,
   });
+
+  @override
+  State<HouseholdStratagemApp> createState() => _HouseholdStratagemAppState();
+}
+
+class _HouseholdStratagemAppState extends State<HouseholdStratagemApp>
+    with WidgetsBindingObserver {
+  late final AudioService _audioService;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _audioService = widget.audioService ?? RealAudioService();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    _audioService.handleAppLifecycleState(state);
+  }
 
   @override
   Widget build(BuildContext context) {
     return ThemeProvider(
-      notifier: themeManager,
+      notifier: widget.themeManager,
       child: Builder(
         builder: (context) {
           final themeData = ThemeProvider.of(context).currentTheme;
@@ -84,11 +116,11 @@ class HouseholdStratagemApp extends StatelessWidget {
               ),
             ),
             home: SplashScreen(
-              authService: authService,
-              householdRepo: householdRepo,
+              authService: widget.authService,
+              householdRepo: widget.householdRepo,
             ),
           );
-        }
+        },
       ),
     );
   }

@@ -74,27 +74,67 @@ flutter test test/e2e/e2e_all_test.dart
 > ### 📢 REGISTRE OFFICIEL DES ATTRIBUTIONS AUDIO & LICENCES
 > Tous les actifs sonores et musicaux intégrés dans **HouseholdStratagem** respectent scrupuleusement les conditions de diffusion de **Wikimedia Commons** et des licences **Creative Commons**.
 
-### 🎵 Musique de Mission
-- **Musique de mission : Cj Aist (Wikimedia Commons - CC BY 3.0)**
+### 🎵 Musiques de Mission Tactique (6 Pistes Distinctes)
+
+- **Piste 1 (Alpha) — `tactical_ambiance_1.mp3`**
   - **Titre de l'œuvre** : *Epic battle*
   - **Auteur / Compositeur** : Cj Aist
   - **Source officielle** : [Wikimedia Commons — File:Cj_Aist_-_Epic_battle.mp3](https://commons.wikimedia.org/wiki/File:Cj_Aist_-_Epic_battle.mp3)
   - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
-  - **Notice d'utilisation** : Piste audio intégrée en boucle d'accompagnement (`tactical_ambiance_1.mp3`, `tactical_ambiance_2.mp3`, `tactical_ambiance_3.mp3`) durant les opérations de nettoyage minutées.
+  - **Notice d'utilisation** : Rythme martial et percussions d'assaut tactique durant les opérations minutées.
 
-### 🎧 Ambiance Audio & Passerelle de Commandement
-- **Ambiance Command Bridge : Domaine Public / CC0**
-  - **Désignation** : Atmosphère sonore tactique et bruitages d'arrière-plan du centre de commandement ménager.
-  - **Licence légale** : [Creative Commons CC0 1.0 Universal — Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/)
-  - **Statut légal** : Libre de droits, aucune restriction commerciale ou d'attribution requise.
+- **Piste 2 (Bravo) — `tactical_ambiance_2.mp3`**
+  - **Titre de l'œuvre** : *Epic Questionmark*
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:Epic Questionmark (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:Epic_Questionmark_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Tension opérationnelle héroïque, cordes dramatiques et marche sous pression.
+
+- **Piste 3 (Charlie) — `tactical_ambiance_3.mp3`**
+  - **Titre de l'œuvre** : *Not So Epic* (Heavy Recon)
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:Not So Epic (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:Not_So_Epic_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Infiltration lourde, basse industrielle et suspense d'intervention tactique.
+
+- **Piste 4 (Delta) — `tactical_ambiance_4.mp3`**
+  - **Titre de l'œuvre** : *Dark Synth*
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:Dark Synth (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:Dark_Synth_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Ondes synthétiques sombres, battements électroniques cybernétiques et dynamique d'assaut.
+
+- **Piste 5 (Echo) — `tactical_ambiance_5.mp3`**
+  - **Titre de l'œuvre** : *Future City*
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:Future City (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:Future_City_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Électro futuriste haute cadence, ambiance urbaine sci-fi d'intervention d'urgence.
+
+- **Piste 6 (Foxtrot) — `tactical_ambiance_6.mp3`**
+  - **Titre de l'œuvre** : *Space Dominator Squadron*
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:Space Dominator Squadron (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:Space_Dominator_Squadron_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Marche d'escadron spatial, percussions électroniques intenses et assaut critique.
+
+### 🎧 Ambiance Passerelle de Commandement (Bridge Deck)
+
+- **Ambiance Command Bridge — `bridge_ambiance.mp3`**
+  - **Titre de l'œuvre** : *The Bridge*
+  - **Auteur / Compositeur** : Antti Luode
+  - **Source officielle** : [Wikimedia Commons — File:The Bridge (Antti Luode).mp3](https://commons.wikimedia.org/wiki/File:The_Bridge_(Antti_Luode).mp3)
+  - **Licence légale** : [Creative Commons Attribution 3.0 Unported (CC BY 3.0)](https://creativecommons.org/licenses/by/3.0/)
+  - **Notice d'utilisation** : Boucle d'ambiance sonore globale pour le centre d'opérations et la passerelle de commandement.
 
 ### 🔊 SFX Tactiques
-- **SFX Tactiques : Domaine Public / CC0**
+
+- **SFX Tactiques procéduraux : Domaine Public / CC0**
   - **Catalogue d'effets sonores** :
     - `swipe.wav` : Signal acoustique de balayage directionnel de stratagème.
     - `deploy.wav` : Carillon d'activation et d'engagement de mission.
     - `victory.wav` : Fanfare d'accomplissement et de validation finale de tâche.
-  - **Conception & Synthèse** : Génération procédurale d'ondes sinusoïdales à modulation d'enveloppe (`build_audio.py`).
+  - **Conception & Synthèse** : Génération procédurale d'ondes sinusoïdales à modulation d'enveloppe (`build_audio.py` / Mil-Tech Audio Core).
   - **Licence légale** : [Creative Commons CC0 1.0 Universal (Domaine Public)](https://creativecommons.org/publicdomain/zero/1.0/)
 
 ---

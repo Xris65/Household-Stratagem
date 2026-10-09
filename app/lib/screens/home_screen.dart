@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadChores();
+    RealAudioService().playBridgeLoop();
   }
 
   Future<void> _loadChores() async {
@@ -95,7 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 householdRepo: widget.householdRepo,
               ),
             ),
-          ).then((_) => _loadChores());
+          ).then((_) {
+            _loadChores();
+            RealAudioService().resumeBridgeLoop();
+          });
         }
       } else {
         _triggerError();

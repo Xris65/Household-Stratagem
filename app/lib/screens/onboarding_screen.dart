@@ -256,7 +256,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 return Container(
                   margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(12.0),
                     border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.3), width: 1.0),
                     boxShadow: [
@@ -267,9 +266,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ],
                   ),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
+                  child: Material(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12.0),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
                       initiallyExpanded: roomIndex == 0,
                       iconColor: Theme.of(context).colorScheme.secondary,
                       collapsedIconColor: Theme.of(context).primaryColor,
@@ -389,7 +391,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                );
+                ),
+              );
               },
             ),
           ),

@@ -690,13 +690,16 @@ void main() {
       expect(audio.sfxEnabled, isFalse);
     });
 
-    test('3-track catalog has 3 curated mission tracks with metadata', () {
+    test('6-track catalog has 6 curated mission tracks with metadata', () {
       final tracks = RealAudioService.missionTracks;
-      expect(tracks.length, equals(3));
+      expect(tracks.length, equals(6));
       expect(tracks.map((t) => t.assetPath), containsAll([
         'tactical_ambiance_1.mp3',
         'tactical_ambiance_2.mp3',
         'tactical_ambiance_3.mp3',
+        'tactical_ambiance_4.mp3',
+        'tactical_ambiance_5.mp3',
+        'tactical_ambiance_6.mp3',
       ]));
       for (final t in tracks) {
         expect(t.title, isNotEmpty);
@@ -727,4 +730,165 @@ void main() {
       expect(audio.selectedTrack, equals('tactical_ambiance_1.mp3'));
     });
   });
+
+  group('7. AudioService - Performance & Advanced Controls (Warm-up, Bridge Loop, Session Mute, Track Switching)', () {
+    late MockAudioService audio;
+
+    setUp(() {
+      audio = MockAudioService();
+    });
+
+    tearDown(() {
+      audio.dispose();
+    });
+
+    test('warmUp executes without failure and increments warmUpCount', () async {
+      expect(audio.warmUpCount, equals(0));
+      await audio.warmUp();
+      expect(audio.warmUpCount, equals(1));
+    });
+
+    test('Bridge ambiance loop controls: playBridgeLoop, stopBridgeLoop, resumeBridgeLoop', () async {
+      expect(audio.isBridgePlaying, isFalse);
+      expect(audio.bridgePlayingNotifier.value, isFalse);
+
+      await audio.playBridgeLoop();
+      expect(audio.isBridgePlaying, isTrue);
+      expect(audio.bridgePlayingNotifier.value, isTrue);
+      expect(audio.bridgePlayCount, equals(1));
+
+      await audio.stopBridgeLoop();
+      expect(audio.isBridgePlaying, isFalse);
+      expect(audio.bridgePlayingNotifier.value, isFalse);
+      expect(audio.bridgeStopCount, equals(1));
+
+      await audio.resumeBridgeLoop();
+      expect(audio.isBridgePlaying, isTrue);
+      expect(audio.bridgePlayingNotifier.value, isTrue);
+      expect(audio.bridgeResumeCount, equals(1));
+    });
+
+    test('Mission playback smoothly pauses bridge loop and mission stop resumes it', () async {
+      await audio.playBridgeLoop();
+      expect(audio.isBridgePlaying, isTrue);
+
+      // Starting mission pauses bridge loop
+      await audio.playMissionLoop('tactical_ambiance_1.mp3');
+      expect(audio.isPlaying, isTrue);
+      expect(audio.isMissionPlaying, isTrue);
+      expect(audio.isBridgePlaying, isFalse);
+
+      // Stopping mission automatically resumes bridge loop
+      await audio.stop();
+      expect(audio.isPlaying, isFalse);
+      expect(audio.isBridgePlaying, isTrue);
+      expect(audio.bridgeResumeCount, equals(1));
+    });
+
+    test('Temporary in-mission session mute does NOT overwrite global persistent settings', () {
+      expect(audio.musicEnabled, isTrue);
+      expect(audio.isMuted, isFalse);
+      expect(audio.isSessionMuted, isFalse);
+      expect(audio.sessionMutedNotifier.value, isFalse);
+
+      audio.toggleSessionMute();
+      expect(audio.isSessionMuted, isTrue);
+      expect(audio.sessionMutedNotifier.value, isTrue);
+      // Global settings must remain untouched
+      expect(audio.musicEnabled, isTrue);
+      expect(audio.isMuted, isFalse);
+
+      audio.setSessionMuted(false);
+      expect(audio.isSessionMuted, isFalse);
+      expect(audio.sessionMutedNotifier.value, isFalse);
+      expect(audio.musicEnabled, isTrue);
+      expect(audio.isMuted, isFalse);
+
+      // Mute again, then verify stop resets session mute
+      audio.setSessionMuted(true);
+      expect(audio.isSessionMuted, isTrue);
+      audio.stop();
+      expect(audio.isSessionMuted, isFalse);
+    });
+
+    test('On-the-fly live track switching seamlessly updates soundtrack while playing', () async {
+      await audio.playMissionLoop('tactical_ambiance_1.mp3');
+      expect(audio.currentTrack, equals('tactical_ambiance_1.mp3'));
+
+      await audio.switchMissionTrack('tactical_ambiance_2.mp3');
+      expect(audio.currentTrack, equals('tactical_ambiance_2.mp3'));
+      expect(audio.selectedTrack, equals('tactical_ambiance_2.mp3'));
+      expect(audio.switchTrackCount, equals(1));
+      expect(audio.switchedTracks, contains('tactical_ambiance_2.mp3'));
+    });
+
+    test('switchMissionTrack when stopped updates selectedTrack for instant next start', () async {
+      expect(audio.isPlaying, isFalse);
+      await audio.switchMissionTrack('tactical_ambiance_3.mp3');
+
+      expect(audio.selectedTrack, equals('tactical_ambiance_3.mp3'));
+      expect(audio.isPlaying, isFalse);
+      expect(audio.switchTrackCount, equals(1));
+    });
+
+    test('switchMissionTrack throws ArgumentError on empty or whitespace trackId', () async {
+      expect(() => audio.switchMissionTrack(''), throwsA(isA<ArgumentError>()));
+      expect(() => audio.switchMissionTrack('   '), throwsA(isA<ArgumentError>()));
+    });
+
+    test('pauseMissionLoop and resumeMissionLoop control mission stream without stopping', () async {
+      await audio.playMissionLoop('tactical_ambiance_1.mp3');
+      expect(audio.isPlaying, isTrue);
+      expect(audio.isMissionPaused, isFalse);
+
+      await audio.pauseMissionLoop();
+      expect(audio.isPlaying, isTrue);
+      expect(audio.isMissionPaused, isTrue);
+      expect(audio.pauseCount, equals(1));
+
+      await audio.resumeMissionLoop();
+      expect(audio.isPlaying, isTrue);
+      expect(audio.isMissionPaused, isFalse);
+      expect(audio.resumeCount, equals(1));
+    });
+
+    test('Strict separation between appAmbianceEnabled and missionMusicEnabled state and notifiers', () async {
+      expect(audio.appAmbianceEnabled, isTrue);
+      expect(audio.missionMusicEnabled, isTrue);
+      expect(audio.appAmbianceNotifier.value, isTrue);
+      expect(audio.missionMusicNotifier.value, isTrue);
+
+      // Toggling appAmbiance only alters app ambiance
+      audio.toggleAppAmbiance();
+      expect(audio.appAmbianceEnabled, isFalse);
+      expect(audio.appAmbianceNotifier.value, isFalse);
+      expect(audio.missionMusicEnabled, isTrue);
+      expect(audio.missionMusicNotifier.value, isTrue);
+
+      // Toggling missionMusic only alters mission music
+      audio.toggleMissionMusic();
+      expect(audio.missionMusicEnabled, isFalse);
+      expect(audio.missionMusicNotifier.value, isFalse);
+      expect(audio.appAmbianceEnabled, isFalse);
+      expect(audio.appAmbianceNotifier.value, isFalse);
+
+      await audio.setAppAmbianceEnabled(true);
+      expect(audio.appAmbianceEnabled, isTrue);
+      expect(audio.missionMusicEnabled, isFalse);
+
+      await audio.setMissionMusicEnabled(true);
+      expect(audio.appAmbianceEnabled, isTrue);
+      expect(audio.missionMusicEnabled, isTrue);
+    });
+
+    test('RealAudioService.resolveTrackPath correctly resolves bare names, titles, and extensions', () {
+      expect(RealAudioService.resolveTrackPath('tactical_ambiance_1.mp3'), equals('tactical_ambiance_1.mp3'));
+      expect(RealAudioService.resolveTrackPath('tactical_ambiance_2'), equals('tactical_ambiance_2.mp3'));
+      expect(RealAudioService.resolveTrackPath('Mission Alpha: Epic Battle'), equals('tactical_ambiance_1.mp3'));
+      expect(RealAudioService.resolveTrackPath('mission charlie: heavy recon'), equals('tactical_ambiance_3.mp3'));
+      expect(RealAudioService.resolveTrackPath('custom_track'), equals('custom_track.mp3'));
+      expect(() => RealAudioService.resolveTrackPath(''), throwsA(isA<ArgumentError>()));
+    });
+  });
 }
+
