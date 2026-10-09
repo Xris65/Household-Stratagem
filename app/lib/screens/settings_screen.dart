@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
 import '../theme/theme_manager.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
@@ -31,9 +29,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final AudioService _audioService;
-  AudioPlayer? _previewPlayer;
-  StreamSubscription<void>? _completionSubscription;
-  String? _previewingTrack;
 
   UserProfile? _userProfile;
   bool _isLoadingProfile = true;
@@ -42,24 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _audioService = widget.audioService ?? RealAudioService();
-    _initPreviewPlayer();
     _loadUserProfile();
-  }
-
-  void _initPreviewPlayer() {
-    try {
-      _previewPlayer = AudioPlayer();
-      _previewPlayer?.setReleaseMode(ReleaseMode.stop);
-      _completionSubscription = _previewPlayer?.onPlayerComplete.listen((_) {
-        if (mounted) {
-          setState(() {
-            _previewingTrack = null;
-          });
-        }
-      });
-    } catch (e) {
-      debugPrint('Preview player initialization ignored: $e');
-    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -89,7 +67,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _navigateToOnboarding() async {
-    _stopPreview();
+    await _audioService.stopTrackPreview();
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -109,60 +88,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    try {
-      _completionSubscription?.cancel();
-      _previewPlayer?.stop();
-      _previewPlayer?.dispose();
-    } catch (_) {}
+    _audioService.stopTrackPreview();
     super.dispose();
   }
 
-  void _stopPreview() {
-    if (_previewingTrack != null) {
-      try {
-        _previewPlayer?.stop();
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _previewingTrack = null;
-        });
-      }
-    }
-  }
-
   Future<void> _toggleTrackPreview(String assetPath) async {
-    if (_previewingTrack == assetPath) {
-      // Toggle off current preview
-      setState(() {
-        _previewingTrack = null;
-      });
-      try {
-        await _previewPlayer?.stop();
-      } catch (_) {}
+    final active = _audioService.previewingTrackNotifier.value;
+    if (active != null &&
+        (active == assetPath ||
+         RealAudioService.resolveTrackPath(active) == RealAudioService.resolveTrackPath(assetPath))) {
+      await _audioService.stopTrackPreview();
     } else {
-      // Start or switch to new track preview
-      setState(() {
-        _previewingTrack = assetPath;
-      });
-      try {
-        await _previewPlayer?.stop();
-        final normalized = RealAudioService.normalizeAssetPath(assetPath);
-        await _previewPlayer?.setReleaseMode(ReleaseMode.stop);
-        await _previewPlayer?.setVolume(1.0);
-        await _previewPlayer?.play(AssetSource(normalized));
-      } catch (e) {
-        debugPrint('Error playing audio preview: $e');
-        if (mounted && _previewingTrack == assetPath) {
-          setState(() {
-            _previewingTrack = null;
-          });
-        }
-      }
+      await _audioService.playTrackPreview(assetPath);
     }
   }
 
   Future<void> _selectTrack(String track) async {
-    _stopPreview();
+    await _audioService.stopTrackPreview();
     await _audioService.setSelectedTrack(track);
     try {
       final profile = await widget.householdRepo.getUserProfile(widget.userId);
@@ -455,107 +397,115 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ValueListenableBuilder<String>(
             valueListenable: _audioService.selectedTrackNotifier,
             builder: (context, selectedTrack, child) {
-              return Column(
-                children: SettingsScreen.selectableTracks.map((track) {
-                  final bool isSelected = selectedTrack == track.assetPath;
-                  final bool isPreviewing = _previewingTrack == track.assetPath;
+              return ValueListenableBuilder<String?>(
+                valueListenable: _audioService.previewingTrackNotifier,
+                builder: (context, previewingTrack, _) {
+                  return Column(
+                    children: SettingsScreen.selectableTracks.map((track) {
+                      final bool isSelected = selectedTrack == track.assetPath;
+                      final bool isPreviewing = previewingTrack != null &&
+                          (previewingTrack == track.assetPath ||
+                           previewingTrack == track.id ||
+                           RealAudioService.resolveTrackPath(previewingTrack) == track.assetPath);
 
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: isSelected
-                          ? Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.6), width: 1.2)
-                          : Border.all(color: Colors.transparent),
-                    ),
-                    child: Material(
-                      color: isSelected
-                          ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                        leading: Radio<String>(
-                          value: track.assetPath,
-                          groupValue: selectedTrack,
-                          activeColor: Theme.of(context).primaryColor,
-                          onChanged: (val) {
-                            if (val != null) _selectTrack(val);
-                          },
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: isSelected
+                              ? Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.6), width: 1.2)
+                              : Border.all(color: Colors.transparent),
                         ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                track.title,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Theme.of(context).primaryColor
-                                      : Colors.white,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  fontSize: 13,
-                                ),
-                              ),
+                        child: Material(
+                          color: isSelected
+                              ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            leading: Radio<String>(
+                              value: track.assetPath,
+                              groupValue: selectedTrack,
+                              activeColor: Theme.of(context).primaryColor,
+                              onChanged: (val) {
+                                if (val != null) _selectTrack(val);
+                              },
                             ),
-                            if (isSelected)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                margin: const EdgeInsets.only(left: 4),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Theme.of(context).primaryColor, width: 0.8),
-                                ),
-                                child: Text(
-                                  'ACTIF',
-                                  style: TextStyle(
-                                    color: Theme.of(context).primaryColor,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    track.title,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Theme.of(context).primaryColor
+                                          : Colors.white,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${track.subtitle} • ${track.artist}',
-                                style: const TextStyle(color: Colors.white54, fontSize: 11),
-                              ),
+                                if (isSelected)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(left: 4),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: Theme.of(context).primaryColor, width: 0.8),
+                                    ),
+                                    child: Text(
+                                      'ACTIF',
+                                      style: TextStyle(
+                                        color: Theme.of(context).primaryColor,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                            if (isPreviewing)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4.0),
-                                child: Text(
-                                  '▶ LECTURE',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.secondary,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
+                            subtitle: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${track.subtitle} • ${track.artist}',
+                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                                   ),
                                 ),
+                                if (isPreviewing)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4.0),
+                                    child: Text(
+                                      '▶ LECTURE',
+                                      style: TextStyle(
+                                        color: Theme.of(context).colorScheme.secondary,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(
+                                isPreviewing ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                                color: isPreviewing
+                                    ? Theme.of(context).colorScheme.secondary
+                                    : Theme.of(context).primaryColor,
+                                size: 30,
                               ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(
-                            isPreviewing ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
-                            color: isPreviewing
-                                ? Theme.of(context).colorScheme.secondary
-                                : Theme.of(context).primaryColor,
-                            size: 30,
+                              tooltip: isPreviewing ? 'Arrêter l\'extrait' : 'Écouter un extrait',
+                              onPressed: () => _toggleTrackPreview(track.assetPath),
+                            ),
+                            onTap: () => _selectTrack(track.assetPath),
                           ),
-                          tooltip: isPreviewing ? 'Arrêter l\'extrait' : 'Écouter un extrait',
-                          onPressed: () => _toggleTrackPreview(track.assetPath),
                         ),
-                        onTap: () => _selectTrack(track.assetPath),
-                      ),
-                    ),
+                      );
+                    }).toList(),
                   );
-                }).toList(),
+                },
               );
             },
           ),
@@ -935,7 +885,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         trailing: Icon(Icons.exit_to_app, color: Theme.of(context).colorScheme.error, size: 20),
         onTap: () async {
-          _stopPreview();
+          await _audioService.stopTrackPreview();
           await widget.authService.signOut();
           if (mounted) Navigator.pop(context);
         },

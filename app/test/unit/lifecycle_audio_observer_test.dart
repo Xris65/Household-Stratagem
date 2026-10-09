@@ -115,5 +115,76 @@ void main() {
       simulateBackground(tester);
       await tester.pump();
     });
+
+    testWidgets('Track preview pauses on backgrounding and resumes on foregrounding while ambiance stays paused',
+        (WidgetTester tester) async {
+      // Start bridge ambiance first
+      await mockAudio.playBridgeLoop();
+      expect(mockAudio.isBridgePlaying, isTrue);
+
+      // Start preview: ambiance is paused, preview starts
+      await mockAudio.playTrackPreview('tactical_ambiance_2.mp3');
+      expect(mockAudio.isBridgePlaying, isFalse);
+      expect(mockAudio.isPreviewActive, isTrue);
+      expect(mockAudio.previewingTrackNotifier.value, equals('tactical_ambiance_2.mp3'));
+
+      await tester.pumpWidget(HouseholdStratagemApp(
+        authService: authService,
+        householdRepo: householdRepo,
+        themeManager: themeManager,
+        audioService: mockAudio,
+      ));
+      await tester.pumpAndSettle();
+
+      // Background app: preview must pause
+      simulateBackground(tester);
+      await tester.pump();
+
+      expect(mockAudio.isPreviewPausedByLifecycle, isTrue);
+      expect(mockAudio.previewPauseCount, greaterThanOrEqualTo(1));
+      expect(mockAudio.isBridgePlaying, isFalse);
+      expect(mockAudio.isPreviewActive, isTrue);
+
+      // Foreground app: preview resumes, ambiance remains paused!
+      simulateForeground(tester);
+      await tester.pump();
+
+      expect(mockAudio.isPreviewPausedByLifecycle, isFalse);
+      expect(mockAudio.previewResumeCount, greaterThanOrEqualTo(1));
+      // General app ambiance must NOT restart over the preview!
+      expect(mockAudio.isBridgePlaying, isFalse);
+      expect(mockAudio.isPreviewActive, isTrue);
+
+      // When preview is stopped, general app ambiance is cleanly restored
+      await mockAudio.stopTrackPreview();
+      expect(mockAudio.isPreviewActive, isFalse);
+      expect(mockAudio.isBridgePlaying, isTrue);
+    });
+
+    testWidgets('General app ambiance resumes on foregrounding when no preview was playing',
+        (WidgetTester tester) async {
+      await mockAudio.playBridgeLoop();
+      expect(mockAudio.isBridgePlaying, isTrue);
+      expect(mockAudio.isPreviewActive, isFalse);
+
+      await tester.pumpWidget(HouseholdStratagemApp(
+        authService: authService,
+        householdRepo: householdRepo,
+        themeManager: themeManager,
+        audioService: mockAudio,
+      ));
+      await tester.pumpAndSettle();
+
+      simulateBackground(tester);
+      await tester.pump();
+
+      expect(mockAudio.isBridgePlaying, isFalse);
+
+      simulateForeground(tester);
+      await tester.pump();
+
+      // General app ambiance resumes cleanly
+      expect(mockAudio.isBridgePlaying, isTrue);
+    });
   });
 }

@@ -103,6 +103,8 @@ void main() {
       // Track 2 should now have stop icon
       expect(find.byIcon(Icons.stop_circle_rounded), findsOneWidget);
       expect(find.text('▶ LECTURE'), findsOneWidget);
+      expect(audioService.previewPlayCount, equals(1));
+      expect(audioService.previewingTrackNotifier.value, equals('tactical_ambiance_2.mp3'));
 
       // Tap stop on track 2 preview
       final stopButton = find.byIcon(Icons.stop_circle_rounded);
@@ -112,6 +114,8 @@ void main() {
       // All 6 buttons are back to play icon
       expect(find.byIcon(Icons.play_circle_fill_rounded), findsNWidgets(6));
       expect(find.text('▶ LECTURE'), findsNothing);
+      expect(audioService.previewStopCount, equals(1));
+      expect(audioService.previewingTrackNotifier.value, isNull);
 
       // Select track 3
       final track3Title = find.text('Mission Charlie: Heavy Recon');
@@ -300,6 +304,109 @@ void main() {
 
       // Successfully navigated to OnboardingScreen
       expect(find.byType(OnboardingScreen), findsOneWidget);
+    });
+
+    testWidgets('previewingTrackNotifier updates keep play/stop button and [▶ LECTURE] badge reactive and synchronized',
+        (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 3200));
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        tester.view.resetPhysicalSize();
+      });
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Initially all are play buttons
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsNWidgets(6));
+      expect(find.byIcon(Icons.stop_circle_rounded), findsNothing);
+      expect(find.text('▶ LECTURE'), findsNothing);
+
+      // Externally update notifier to track 3
+      audioService.previewingTrackNotifier.value = 'tactical_ambiance_3.mp3';
+      await tester.pump();
+
+      // UI reacts instantly: stop button and badge on track 3
+      expect(find.byIcon(Icons.stop_circle_rounded), findsOneWidget);
+      expect(find.text('▶ LECTURE'), findsOneWidget);
+
+      // Externally clear notifier
+      audioService.previewingTrackNotifier.value = null;
+      await tester.pump();
+
+      expect(find.byIcon(Icons.stop_circle_rounded), findsNothing);
+      expect(find.byIcon(Icons.play_circle_fill_rounded), findsNWidgets(6));
+      expect(find.text('▶ LECTURE'), findsNothing);
+    });
+
+    testWidgets('leaving SettingsScreen restores general app ambiance and stops preview',
+        (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 3200));
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        tester.view.resetPhysicalSize();
+      });
+
+      // Start bridge loop
+      await audioService.playBridgeLoop();
+      expect(audioService.isBridgePlaying, isTrue);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Tap preview on track 1: bridge ambiance is paused, preview starts
+      await tester.tap(find.byIcon(Icons.play_circle_fill_rounded).first);
+      await tester.pump();
+
+      expect(audioService.isPreviewActive, isTrue);
+      expect(audioService.isBridgePlaying, isFalse);
+
+      // Leave screen (simulate pop / dispose)
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+
+      // Preview is stopped and bridge ambiance is restored!
+      expect(audioService.isPreviewActive, isFalse);
+      expect(audioService.isBridgePlaying, isTrue);
+    });
+
+    testWidgets('selecting a track stops active preview and restores ambiance',
+        (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 3200));
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        tester.view.resetPhysicalSize();
+      });
+
+      await audioService.playBridgeLoop();
+      expect(audioService.isBridgePlaying, isTrue);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // Start preview on track 2
+      final track2Preview = find.byIcon(Icons.play_circle_fill_rounded).at(1);
+      await tester.tap(track2Preview);
+      await tester.pump();
+
+      expect(audioService.isPreviewActive, isTrue);
+      expect(audioService.isBridgePlaying, isFalse);
+
+      // Select track 4
+      final track4Title = find.text('Mission Delta: Dark Synth');
+      await tester.tap(track4Title);
+      await tester.pumpAndSettle();
+
+      // Preview is stopped and bridge ambiance is restored!
+      expect(audioService.isPreviewActive, isFalse);
+      expect(audioService.selectedTrack, equals('tactical_ambiance_4.mp3'));
+      expect(audioService.isBridgePlaying, isTrue);
     });
   });
 }

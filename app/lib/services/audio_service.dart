@@ -168,6 +168,12 @@ abstract class AudioService {
   /// Reuses persistent AudioPlayer instances without disposing or recreating them.
   Future<void> switchMissionTrack(String trackId);
 
+  /// Whether a track preview is currently active.
+  bool get isPreviewActive;
+
+  /// Alias for [isPreviewActive].
+  bool get isPreviewPlaying;
+
   /// Plays a preview sample of a mission track using a persistent preview player.
   Future<void> playTrackPreview(String trackId);
 
@@ -231,7 +237,9 @@ class RealAudioService implements AudioService {
   bool _disposed = false;
   bool _isBridgePlaying = false;
   bool _wasBridgePlayingBeforeMission = false;
+  bool _wasBridgePlayingBeforePreview = false;
   bool _isBridgePausedByLifecycle = false;
+  bool _isPreviewPausedByLifecycle = false;
   bool _isWarmingUp = false;
 
   /// Dedicated AudioContext configuration ensuring tactical mission audio
@@ -253,6 +261,12 @@ class RealAudioService implements AudioService {
   );
 
   final ValueNotifier<String?> _previewingTrackNotifier = ValueNotifier<String?>(null);
+
+  @override
+  bool get isPreviewActive => _previewingTrackNotifier.value != null;
+
+  @override
+  bool get isPreviewPlaying => isPreviewActive;
 
   @override
   AudioPlayer get previewPlayer => _previewPlayer;
@@ -348,6 +362,13 @@ class RealAudioService implements AudioService {
 
     _previewPlayer.onPlayerComplete.listen((_) {
       _previewingTrackNotifier.value = null;
+      _isPreviewPausedByLifecycle = false;
+      if (_wasBridgePlayingBeforePreview || (appAmbianceEnabled && !_isPlaying)) {
+        _wasBridgePlayingBeforePreview = false;
+        resumeBridgeLoop();
+      } else {
+        _wasBridgePlayingBeforePreview = false;
+      }
     });
 
     try {
@@ -492,6 +513,9 @@ class RealAudioService implements AudioService {
   @override
   Future<void> playMissionLoop(String assetPath) async {
     if (_disposed) return;
+    if (_previewingTrackNotifier.value != null) {
+      await stopTrackPreview();
+    }
     final p = RealAudioService.normalizeAssetPath(assetPath);
     if (_isPlaying && _currentTrack == p && !_isMissionPaused) return;
 
@@ -637,17 +661,42 @@ class RealAudioService implements AudioService {
     await resumeBridgeLoop();
   }
 
+  AppLifecycleState _lastLifecycleState = AppLifecycleState.resumed;
+
   @override
   Future<void> handleAppLifecycleState(AppLifecycleState state, {bool isOnMenu = true}) async {
     if (_disposed) return;
+    _lastLifecycleState = state;
     if (state != AppLifecycleState.resumed) {
-      // Backgrounded / Minimized / Inactive: Immediately cut general app ambiance.
+      // If a preview is active, immediately mark it as paused by lifecycle
+      if (_previewingTrackNotifier.value != null) {
+        _isPreviewPausedByLifecycle = true;
+      }
+
+      // Minimized / Paused / Inactive: Immediately cut general app ambiance.
       // Mission music continues playing in pocket!
       await pauseAppAmbiance();
+      if (_lastLifecycleState != state) return;
+
+      if (_previewingTrackNotifier.value != null) {
+        try {
+          await _previewPlayer.pause();
+        } catch (_) {}
+      }
     } else {
-      // Foreground resumed: resume ambiance only if on menu/home and enabled.
-      if (isOnMenu && appAmbianceEnabled && !_isPlaying && _isBridgePausedByLifecycle) {
-        await resumeAppAmbiance();
+      // Foreground resumed:
+      if (_isPreviewPausedByLifecycle) {
+        _isPreviewPausedByLifecycle = false;
+        try {
+          await _previewPlayer.resume();
+        } catch (_) {}
+        // DO NOT restart general app ambiance! App ambiance must remain paused while preview resumes.
+      } else {
+        // Resume general app ambiance as normal if enabled, on menu, and not in mission.
+        if (isOnMenu && appAmbianceEnabled && !_isPlaying && _isBridgePausedByLifecycle) {
+          _isBridgePausedByLifecycle = false;
+          await resumeAppAmbiance();
+        }
       }
     }
   }
@@ -826,6 +875,18 @@ class RealAudioService implements AudioService {
   @override
   Future<void> playTrackPreview(String trackId) async {
     if (_disposed) return;
+    _isPreviewPausedByLifecycle = false;
+
+    // Pauses general app ambiance / bridge loop if active
+    if (_isBridgePlaying) {
+      _wasBridgePlayingBeforePreview = true;
+      _isBridgePlaying = false;
+      _bridgePlayingNotifier.value = false;
+      try {
+        await _bridgePlayer.pause();
+      } catch (_) {}
+    }
+
     final resolved = RealAudioService.resolveTrackPath(trackId);
     final normalized = RealAudioService.normalizeAssetPath(resolved);
     _previewingTrackNotifier.value = resolved;
@@ -839,9 +900,18 @@ class RealAudioService implements AudioService {
   Future<void> stopTrackPreview() async {
     if (_disposed) return;
     _previewingTrackNotifier.value = null;
+    _isPreviewPausedByLifecycle = false;
     try {
       await _previewPlayer.stop();
     } catch (_) {}
+
+    // Resumes general app ambiance if enabled and on menu
+    if (_wasBridgePlayingBeforePreview || (appAmbianceEnabled && !_isPlaying)) {
+      _wasBridgePlayingBeforePreview = false;
+      await resumeBridgeLoop();
+    } else {
+      _wasBridgePlayingBeforePreview = false;
+    }
   }
 
   @override
@@ -944,6 +1014,8 @@ class RealAudioService implements AudioService {
     _currentTrack = null;
     _isBridgePlaying = false;
     _wasBridgePlayingBeforeMission = false;
+    _wasBridgePlayingBeforePreview = false;
+    _isPreviewPausedByLifecycle = false;
     _previewingTrackNotifier.value = null;
     _disposed = true;
     try {
@@ -989,6 +1061,12 @@ class MockAudioService implements AudioService {
   int switchTrackCount = 0;
   int previewPlayCount = 0;
   int previewStopCount = 0;
+  int previewPauseCount = 0;
+  int previewResumeCount = 0;
+  bool _isPreviewPausedByLifecycle = false;
+  bool _wasBridgePlayingBeforePreview = false;
+  bool _isBridgePausedByLifecycle = false;
+  AppLifecycleState _lastLifecycleState = AppLifecycleState.resumed;
   final List<String> switchedTracks = [];
   final ValueNotifier<String?> _previewingTrackNotifier = ValueNotifier<String?>(null);
   AudioPlayer? _previewPlayer;
@@ -1000,6 +1078,14 @@ class MockAudioService implements AudioService {
   int warmUpCount = 0;
 
   MockAudioService({AudioPlayer? previewPlayerInstance}) : _previewPlayer = previewPlayerInstance;
+
+  @override
+  bool get isPreviewActive => _previewingTrackNotifier.value != null;
+
+  @override
+  bool get isPreviewPlaying => isPreviewActive;
+
+  bool get isPreviewPausedByLifecycle => _isPreviewPausedByLifecycle;
 
   @override
   AudioPlayer get previewPlayer => _previewPlayer ??= AudioPlayer();
@@ -1033,6 +1119,9 @@ class MockAudioService implements AudioService {
     final trimmed = assetPath.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('Asset path cannot be empty');
+    }
+    if (_previewingTrackNotifier.value != null) {
+      await stopTrackPreview();
     }
     if (_isBridgePlaying) {
       _wasBridgePlayingBeforeMission = true;
@@ -1084,6 +1173,7 @@ class MockAudioService implements AudioService {
   Future<void> playBridgeLoop() async {
     if (_disposed) return;
     bridgePlayCount++;
+    _isBridgePausedByLifecycle = false;
     _isBridgePlaying = true;
     _bridgePlayingNotifier.value = true;
     if (_isPlaying) {
@@ -1096,14 +1186,16 @@ class MockAudioService implements AudioService {
     if (_disposed) return;
     bridgeStopCount++;
     _isBridgePlaying = false;
+    _isBridgePausedByLifecycle = false;
     _wasBridgePlayingBeforeMission = false;
     _bridgePlayingNotifier.value = false;
   }
 
   @override
   Future<void> resumeBridgeLoop() async {
-    if (_disposed) return;
+    if (_disposed || _isPlaying) return;
     bridgeResumeCount++;
+    _isBridgePausedByLifecycle = false;
     _isBridgePlaying = true;
     _bridgePlayingNotifier.value = true;
   }
@@ -1111,8 +1203,11 @@ class MockAudioService implements AudioService {
   @override
   Future<void> pauseBridgeLoop() async {
     if (_disposed) return;
-    _isBridgePlaying = false;
-    _bridgePlayingNotifier.value = false;
+    if (_isBridgePlaying) {
+      _isBridgePausedByLifecycle = true;
+      _isBridgePlaying = false;
+      _bridgePlayingNotifier.value = false;
+    }
   }
 
   @override
@@ -1124,10 +1219,25 @@ class MockAudioService implements AudioService {
   @override
   Future<void> handleAppLifecycleState(AppLifecycleState state, {bool isOnMenu = true}) async {
     if (_disposed) return;
+    _lastLifecycleState = state;
     if (state != AppLifecycleState.resumed) {
+      if (_previewingTrackNotifier.value != null) {
+        _isPreviewPausedByLifecycle = true;
+        previewPauseCount++;
+      }
       await pauseAppAmbiance();
-    } else if (isOnMenu && appAmbianceEnabled && !_isPlaying) {
-      await resumeAppAmbiance();
+      if (_lastLifecycleState != state) return;
+    } else {
+      if (_isPreviewPausedByLifecycle) {
+        _isPreviewPausedByLifecycle = false;
+        previewResumeCount++;
+        // DO NOT restart general app ambiance! App ambiance must remain paused while preview resumes.
+      } else {
+        if (isOnMenu && appAmbianceEnabled && !_isPlaying && _isBridgePausedByLifecycle) {
+          _isBridgePausedByLifecycle = false;
+          await resumeAppAmbiance();
+        }
+      }
     }
   }
 
@@ -1236,6 +1346,12 @@ class MockAudioService implements AudioService {
   @override
   Future<void> playTrackPreview(String trackId) async {
     previewPlayCount++;
+    _isPreviewPausedByLifecycle = false;
+    if (_isBridgePlaying) {
+      _wasBridgePlayingBeforePreview = true;
+      _isBridgePlaying = false;
+      _bridgePlayingNotifier.value = false;
+    }
     _previewingTrackNotifier.value = trackId;
   }
 
@@ -1243,6 +1359,13 @@ class MockAudioService implements AudioService {
   Future<void> stopTrackPreview() async {
     previewStopCount++;
     _previewingTrackNotifier.value = null;
+    _isPreviewPausedByLifecycle = false;
+    if (_wasBridgePlayingBeforePreview || (appAmbianceEnabled && !_isPlaying)) {
+      _wasBridgePlayingBeforePreview = false;
+      await resumeBridgeLoop();
+    } else {
+      _wasBridgePlayingBeforePreview = false;
+    }
   }
 
   @override
@@ -1299,6 +1422,9 @@ class MockAudioService implements AudioService {
     _currentTrack = null;
     _isBridgePlaying = false;
     _wasBridgePlayingBeforeMission = false;
+    _wasBridgePlayingBeforePreview = false;
+    _isBridgePausedByLifecycle = false;
+    _isPreviewPausedByLifecycle = false;
     _bridgePlayingNotifier.value = false;
     _previewingTrackNotifier.value = null;
     _disposed = true;
@@ -1326,6 +1452,9 @@ class MockAudioService implements AudioService {
 
     _isBridgePlaying = false;
     _wasBridgePlayingBeforeMission = false;
+    _wasBridgePlayingBeforePreview = false;
+    _isBridgePausedByLifecycle = false;
+    _isPreviewPausedByLifecycle = false;
     bridgePlayCount = 0;
     bridgeStopCount = 0;
     bridgeResumeCount = 0;
@@ -1337,6 +1466,8 @@ class MockAudioService implements AudioService {
     switchTrackCount = 0;
     previewPlayCount = 0;
     previewStopCount = 0;
+    previewPauseCount = 0;
+    previewResumeCount = 0;
     switchedTracks.clear();
     _previewingTrackNotifier.value = null;
 
